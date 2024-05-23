@@ -1,9 +1,7 @@
 module.exports = {
   root: true,
   extends: 'airbnb-base',
-  env: {
-    browser: true,
-  },
+  env: { browser: true, mocha: true },
   parser: '@babel/eslint-parser',
   parserOptions: {
     allowImportExportEverywhere: true,
@@ -11,21 +9,22 @@ module.exports = {
     requireConfigFile: false,
   },
   rules: {
+    'import/no-unresolved': 'off',
     'no-param-reassign': [2, { props: false }],
-    'class-methods-use-this': 0,
-    'import/no-cycle': 0,
     'linebreak-style': ['error', 'unix'],
-    'no-await-in-loop': 0,
-    'no-underscore-dangle': ['error', { allowAfterThis: true }],
-    'import/extensions': ['error', {
-      js: 'always',
-    }],
+    'import/extensions': ['error', { js: 'always' }],
     'object-curly-newline': ['error', {
       ObjectExpression: { multiline: true, minProperties: 6 },
       ObjectPattern: { multiline: true, minProperties: 6 },
       ImportDeclaration: { multiline: true, minProperties: 6 },
       ExportDeclaration: { multiline: true, minProperties: 6 },
     }],
+    'no-await-in-loop': 0,
+    'class-methods-use-this': 0,
+    'no-return-assign': ['error', 'except-parens'],
+    'no-unused-expressions': 0,
+    'chai-friendly/no-unused-expressions': 2,
+    'no-underscore-dangle': ['error', { allowAfterThis: true }],
     'no-restricted-syntax': [
       'error',
       {
@@ -42,4 +41,15 @@ module.exports = {
       },
     ],
   },
+  overrides: [
+    {
+      files: ['test/**/*.js'],
+      rules: {
+        'no-console': 'off',
+      },
+    },
+  ],
+  plugins: [
+    'chai-friendly',
+  ],
 };

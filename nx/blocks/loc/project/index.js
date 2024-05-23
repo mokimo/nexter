@@ -1,4 +1,4 @@
-import { regionalDiff, removeLocTags } from '../regional-diff/regional-diff.js';
+import { regionalDiff, removeLocTags, isIdenticalHtml } from '../regional-diff/regional-diff.js';
 import { daFetch, saveToDa } from '../../../utils/daFetch.js';
 
 const DA_ORIGIN = 'https://admin.da.live';
@@ -89,15 +89,14 @@ export async function rolloutCopy(url, projectTitle) {
 
     removeLocTags(regionalCopy);
 
-    if (langstoreCopy.querySelector('main').outerHTML === regionalCopy.querySelector('main').outerHTML) {
+    if (isIdenticalHtml(langstoreCopy, regionalCopy)) {
       // No differences, don't need to do anything
       url.status = 'success';
       return Promise.resolve();
     }
 
     // There are differences, upload the annotated loc file
-    const diffedMain = await regionalDiff(langstoreCopy, regionalCopy);
-    regionalCopy.querySelector('main').innerHTML = diffedMain.innerHTML;
+    await regionalDiff(langstoreCopy, regionalCopy);
 
     return new Promise((resolve) => {
       const daUrl = getDaUrl(url);
