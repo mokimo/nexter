@@ -28,7 +28,7 @@ export const daFetch = async (url, opts = {}) => {
   return resp;
 };
 
-export async function saveToDa(text, url) {
+export async function saveToDa(text, url, isFullDoc = false) {
   const daPath = `/${url.org}/${url.repo}${url.pathname}`;
   const daHref = `https://da.live/edit#${daPath}`;
 
@@ -41,13 +41,15 @@ export async function saveToDa(text, url) {
       .replaceAll('href="/', `href="${origin}/`);
   }
 
-  const full = `
-    <body>
-      <header></header>
-      <main>${innerHtml}</main>
-      <footer></footer>
-    </body>
-  `;
+  const full = isFullDoc
+    ? text
+    : `
+      <body>
+        <header></header>
+        <main>${innerHtml}</main>
+        <footer></footer>
+      </body>
+    `;
   const blob = new Blob([full], { type: 'text/html' });
   const formData = new FormData();
   formData.append('data', blob);

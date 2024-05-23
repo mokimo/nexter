@@ -100,7 +100,7 @@ export async function rolloutCopy(url, projectTitle) {
 
     return new Promise((resolve) => {
       const daUrl = getDaUrl(url);
-      const savePromise = saveToDa(regionalCopy.documentElement.outerHTML, daUrl);
+      const savePromise = saveToDa(regionalCopy.documentElement.outerHTML, daUrl, true);
 
       const timedout = setTimeout(() => {
         url.status = 'timeout';
