@@ -245,7 +245,8 @@ function getGroupInnerHtml(blockGroup) {
 }
 
 function addSourceTagToMetadata(daMetadataEl, hash, htmlStr) {
-  const sourceEl = document.createElement(SOURCE_TAG);
+  const sourceEl = document.createElement('div');
+  sourceEl.className = 'da-content-source';
   sourceEl.dataset.objHash = hash;
   sourceEl.innerHTML = htmlStr;
   daMetadataEl.appendChild(sourceEl);
