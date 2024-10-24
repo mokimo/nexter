@@ -10,6 +10,8 @@ const buttons = await getStyle(`${nxBase}/styles/buttons.js`);
 const DA_ORIGIN = 'https://admin.da.live';
 const TRANSLATE_CONF = '/.da/translate.json';
 
+const MOCK_URLS = `https://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/aaa-northeast-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/aaa-northeast-case-study-updatedcaastags\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/abb-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/academy-of-art-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/accent-group-ecommerce-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/aci-worldwide-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/adobe-campaign-orchestration-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/adobe-digital-legal-workflow-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/adobe-digital-onboarding-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/adobe-digital-university-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/adobe-inside-adobe-case-study\nhttps://main--bacom-sandbox--adobecom.aem.page/customer-success-stories/adobe-promo-case-study`;
+
 class NxLocDetails extends LitElement {
   static properties = {
     urls: { attribute: false },
@@ -26,6 +28,9 @@ class NxLocDetails extends LitElement {
 
     // Split and de-dupe
     let urls = [...new Set(rawUrls.split('\n'))];
+
+    // Remove empties
+    urls = urls.filter((url) => url);
 
     // Convert to proper URLs
     urls = urls.map((url) => new URL(url));
@@ -125,7 +130,7 @@ class NxLocDetails extends LitElement {
         </div>
         <div>
           <label for="urls">URLs</label>
-          <textarea name="urls" placeholder="Add AEM URLs here.">https://main--da-block-collection--aemsites.hlx.page/drafts/cmillar/sample-page\nhttps://main--da-block-collection--aemsites.hlx.page/drafts/cmillar/sample-two</textarea>
+          <textarea name="urls" placeholder="Add AEM URLs here.">${MOCK_URLS}</textarea>
         </div>
       </form>
     `;

@@ -1,13 +1,11 @@
 import { regionalDiff, removeLocTags } from '../regional-diff/regional-diff.js';
+import { sendForTranslation } from '../google/index.js';
 import { daFetch, saveToDa } from '../../../utils/daFetch.js';
 
 const DA_ORIGIN = 'https://admin.da.live';
 const DEFAULT_TIMEOUT = 20000; // ms
 
 const PARSER = new DOMParser();
-
-const ROW_DNT = '.section-metadata > div';
-const KEY_DNT = '.metadata > div > div:first-of-type';
 
 let projPath;
 
@@ -17,10 +15,58 @@ async function fetchData(path) {
   return resp.json();
 }
 
+export function formatDate(timestamp) {
+  const rawDate = timestamp ? new Date(timestamp) : new Date();
+  const date = rawDate.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+  const time = rawDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return { date, time };
+}
+
+export async function detectService(config) {
+  const name = config['translation.service.name']?.value;
+  if (name === 'GLaaS') {
+    return {
+      name: 'GLaaS',
+      origin: config['translation.service.stage.origin'].value,
+      clientid: config['translation.service.stage.clientid'].value,
+      actions: await import('../glaas/index.js'),
+    };
+  }
+  return {
+    name: 'Google',
+    origin: 'https://translate.da/live',
+    actions: await import('../google/index.js'),
+  };
+}
+
 export async function getDetails() {
   projPath = window.location.hash.replace('#', '');
   const data = await fetchData(`${DA_ORIGIN}/source${projPath}.json`);
   return data;
+}
+
+export function convertUrl({ path, srcLang, destLang }) {
+  const source = path.startsWith(srcLang) ? path : `${srcLang}${path}`;
+  const destSlash = srcLang === '/' ? '/' : '';
+  const destination = path.startsWith(srcLang) ? path.replace(srcLang, `${destLang}${destSlash}`) : `${destLang}${path}`;
+
+  return { source, destination };
+}
+
+export async function saveStatus(json) {
+  // Make a deep copy so the in-memory data is not destroyed
+  const copy = JSON.parse(JSON.stringify(json));
+
+  // Do not save URL content
+  copy.urls.forEach((url) => { delete url.content; });
+
+  const body = new FormData();
+  const file = new Blob([JSON.stringify(copy)], { type: 'application/json' });
+  body.append('data', file);
+  const opts = { body, method: 'POST' };
+  const resp = await daFetch(`${DA_ORIGIN}/source${projPath}.json`, opts);
+  if (!resp.ok) return { error: 'Could not update project' };
+  return json;
 }
 
 async function saveVersion(path, label) {
@@ -62,33 +108,6 @@ export async function overwriteCopy(url, projectTitle) {
 }
 
 const collapseWhitespace = (str) => str.replace(/\s+/g, ' ');
-
-const capturePics = (dom) => {
-  const imgs = dom.querySelectorAll('picture img');
-  imgs.forEach((img) => {
-    [img.src] = img.getAttribute('src').split('?');
-    const pic = img.closest('picture');
-    pic.parentElement.replaceChild(img, pic);
-  });
-};
-
-const captureDnt = (dom) => {
-  const dntEls = dom.querySelectorAll(`${ROW_DNT}, ${KEY_DNT}`);
-  dntEls.forEach((el) => {
-    el.dataset.innerHtml = el.innerHTML;
-    el.innerHTML = '';
-  });
-  console.log(dom);
-};
-
-const releaseDnt = (dom) => {
-  const dntEls = dom.querySelectorAll('[data-inner-html]');
-  dntEls.forEach((el) => {
-    el.innerHTML = el.dataset.innerHtml;
-    delete el.dataset.innerHtml;
-  });
-  return dom.querySelector('main').innerHTML;
-};
 
 const getHtml = async (url, format = 'dom') => {
   const res = await daFetch(`${DA_ORIGIN}/source${url}`);
@@ -154,23 +173,6 @@ export async function rolloutCopy(url, projectTitle) {
   } catch (e) {
     return overwriteCopy(url, projectTitle);
   }
-}
-
-async function sendForTranslation(sourceHtml, toLang) {
-  const body = new FormData();
-  body.append('data', sourceHtml);
-  body.append('fromlang', 'en');
-  body.append('tolang', toLang);
-
-  const opts = { method: 'POST', body };
-
-  const resp = await fetch('https://translate.da.live/translate', opts);
-  if (!resp.ok) {
-    console.log(resp.status);
-    return null;
-  }
-  const json = await resp.json();
-  return json.translated;
 }
 
 export async function translateCopy(toLang, url, projectTitle) {

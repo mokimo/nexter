@@ -3,6 +3,7 @@ import { getConfig } from '../../../../scripts/nexter.js';
 import { daFetch } from '../../../../utils/daFetch.js';
 import getStyle from '../../../../utils/styles.js';
 import getSvg from '../../../../utils/svg.js';
+import normalizeUrls from '../../project/new.js';
 
 const { nxBase } = getConfig();
 const style = await getStyle(import.meta.url);
@@ -22,6 +23,7 @@ class NxLocLangs extends LitElement {
     org: { attribute: false },
     repo: { attribute: false },
     urls: { attribute: false },
+    config: { attribute: false },
     langs: { attribute: false },
   };
 
@@ -36,28 +38,19 @@ class NxLocLangs extends LitElement {
   }
 
   async handleLangsStep(options) {
-    const sourceLang = this.langs.find((lang) => lang.language === this.config['source.language']?.value);
+    const sourceLang = this.langs.find((lang) => lang.name === this.config['source.language']?.value);
 
-    const langs = this.langs.reduce((acc, lang) => {
-      const { action, locales, location, language: name, code } = lang;
-
-      if (lang.action) {
-        acc.push({ action, locales, location, name, code });
-      }
-      return acc;
-    }, []);
+    const langs = this.langs.filter((lang) => lang.action);
 
     const project = {
       title: this.title,
       org: this.org,
       site: this.repo,
+      config: this.config,
       options,
       sourceLang,
       langs,
-      urls: this.urls.map((url) => ({
-        pathname: url.pathname,
-        extpath: url.extPath,
-      })),
+      urls: normalizeUrls(this.urls, langs),
     };
 
     const time = Date.now();
@@ -176,9 +169,10 @@ class NxLocLangs extends LitElement {
           ` : nothing}
         </div>
         ${this.langs.map((lang) => html`
+        ${lang.actions !== '' ? html`
           <div class="lang-group ${lang.locales ? 'has-locales' : ''}">
             <div class="lang-heading">
-              <h3>${lang.language}</h3>
+              <h3>${lang.name}</h3>
               <select @change=${(e) => this.handleChangeAction(e.target.value, lang)}>
                 <option value="">Skip</option>
                 ${lang.actions.split(', ').map((action) => html`
@@ -187,8 +181,8 @@ class NxLocLangs extends LitElement {
               </select>
             </div>
             ${lang.locales ? this.renderLocales(lang) : nothing}
-          </div>
-        </div>
+          </div>` : nothing}
+      </div>
       `)}
     `;
   }
