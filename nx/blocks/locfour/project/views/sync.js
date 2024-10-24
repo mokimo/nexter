@@ -108,7 +108,7 @@ class NxLocSync extends LitElement {
           </ul>
         </div>
         <div class="da-loc-panel-actions">
-          <p>${this._status || html`<strong>Last sync:</strong> ${this._syncDate.date} at ${this._syncDate.time}` || nothing}</p>
+          <p>${this._status || html`<strong>Last sync:</strong> ${this._syncDate?.date} at ${this._syncDate?.time}` || nothing}</p>
           <button class="primary" @click=${this.handleSync}>Sync all</button>
         </div>
       </div>

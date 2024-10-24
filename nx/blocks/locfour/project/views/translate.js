@@ -214,12 +214,12 @@ class NxLocTranslate extends LitElement {
           <div class="da-lang-cards">
             ${this.langs.map((lang) => html`
               <div class="da-lang-card">
-                <div class="da-card-header ${lang.translation.status}">
+                <div class="da-card-header ${lang.translation?.status}">
                   <div>
                     <p class="da-card-subtitle">Language</p>
                     <p class="da-card-title">${lang.name}</p>
                   </div>
-                  <p class="da-card-badge">${lang.translation.status}</p>
+                  <p class="da-card-badge">${lang.translation?.status}</p>
                 </div>
                 <div class="da-card-content">
                   <div class="da-card-details">
