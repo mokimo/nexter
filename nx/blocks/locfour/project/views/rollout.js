@@ -36,8 +36,8 @@ class NxLocRollout extends LitElement {
     lang.rolledOut = 0;
     lang.locales.map((locale) => {
       this.urls.forEach(async (url) => {
-        const sourcePath = `/${this.details.org}/${this.details.site}${lang.location}${url.basePath}`;
-        const destPath = `/${this.details.org}/${this.details.site}${locale.code}${url.basePath}`;
+        const sourcePath = `${this.details.sitePrefix}${lang.location}${url.basePath}`;
+        const destPath = `${this.details.sitePrefix}${locale.code}${url.basePath}`;
         console.log(destPath);
         lang.rolledOut += 1;
       });
@@ -51,6 +51,18 @@ class NxLocRollout extends LitElement {
     }
   }
 
+  getLangStatus(lang) {
+    if (lang.rollout?.status) return lang.rollout.status;
+    if (lang.action === 'rollout') return 'ready';
+    return 'not ready';
+  }
+
+  canRollout(lang) {
+    if (lang.action === 'rollout') return true;
+    if (lang.rollout?.status === 'ready') return true;
+    return false;
+  }
+
   get _totalRollout() {
     const total = this.langs.reduce((acc, lang) => {
       let count = acc;
@@ -58,6 +70,11 @@ class NxLocRollout extends LitElement {
       return count;
     }, 0);
     return total.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  get _canRolloutAll() {
+    const ready = this.langs.filter((lang) => lang.action === 'rollout' || lang.rollout?.status === 'ready');
+    return this.langs.length === ready.length;
   }
 
   render() {
@@ -74,18 +91,18 @@ class NxLocRollout extends LitElement {
           <div class="da-lang-cards">
             ${this.langs.map((lang) => html`
               <div class="da-lang-card">
-                <div class="da-card-header ${lang.rollout?.status || ''}">
+                <div class="da-card-header ${this.getLangStatus(lang).replace(' ', '-')}">
                   <div>
                     <p class="da-card-subtitle">Language</p>
                     <p class="da-card-title">${lang.name}</p>
                   </div>
-                  <p class="da-card-badge">${lang.rollout?.status || 'not ready'}</p>
+                  <p class="da-card-badge">${this.getLangStatus(lang)}</p>
                 </div>
                 <div class="da-card-content">
                   <div class="da-card-details rollout">
                     <div>
                       <p class="da-card-subtitle">Ready</p>
-                      <p class="da-card-title">${lang.translation?.saved || 0} of ${this.urls.length}</p>
+                      <p class="da-card-title">${lang.rollout.ready || 0} of ${this.urls.length}</p>
                     </div>
                     <div>
                       <p class="da-card-subtitle">Rolled out</p>
@@ -97,7 +114,7 @@ class NxLocRollout extends LitElement {
                   </div>
                 </div>
                 <div class="da-card-actions">
-                  ${lang.rollout?.status ? html`<button class="primary" @click=${() => this.handleRolloutLang(lang)}>Rollout</button>` : nothing}
+                  ${this.canRollout(lang) ? html`<button class="primary" @click=${() => this.handleRolloutLang(lang)}>Rollout</button>` : nothing}
                 </div>
               </div>
             `)}
@@ -105,7 +122,7 @@ class NxLocRollout extends LitElement {
         </div>
         <div class="da-loc-panel-actions">
           <p></p>
-          <button class="primary" @click=${this.handleRolloutAll}>Rollout all</button>
+          <button class="primary" @click=${this.handleRolloutAll} ?disabled=${!this._canRolloutAll}>Rollout all</button>
         </div>
       </div>
     `;

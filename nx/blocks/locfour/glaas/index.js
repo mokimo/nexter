@@ -76,13 +76,13 @@ async function updateLangTask(task, langs, setStatus) {
   });
 }
 
-export async function sendAllLanguages(details, service, langs, urls, actions) {
+export async function sendAllLanguages(title, service, langs, urls, actions) {
   const { setStatus, saveState } = actions;
 
   // const timestamp = window.location.hash.split('/').pop();
   const timestamp = Date.now();
 
-  const tasks = langs2tasks(details.title, langs, timestamp);
+  const tasks = langs2tasks(title, langs, timestamp);
 
   for (const key of Object.keys(tasks)) {
     let task = tasks[key];
@@ -141,6 +141,7 @@ export async function getStatusAll(service, langs, actions) {
       lang.translation.translated = translated;
     }
   });
+  setStatus();
   await saveState();
 }
 

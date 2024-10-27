@@ -8,6 +8,7 @@ const DEFAULT_TIMEOUT = 20000; // ms
 const PARSER = new DOMParser();
 
 let projPath;
+let projJson;
 
 async function fetchData(path) {
   const resp = await daFetch(path);
@@ -54,14 +55,23 @@ export function convertUrl({ path, srcLang, destLang }) {
 }
 
 export async function saveStatus(json) {
-  // Make a deep copy so the in-memory data is not destroyed
-  const copy = JSON.parse(JSON.stringify(json));
+  // Make a deep (string) copy so the in-memory data is not destroyed
+  const copy = JSON.stringify(json);
+
+  // Only save if the data is different;
+  if (copy === projJson) return json;
+
+  // Store it for future comparisons
+  projJson = copy;
+
+  // Re-parse for other uses
+  const proj = JSON.parse(projJson);
 
   // Do not save URL content
-  copy.urls.forEach((url) => { delete url.content; });
+  proj.urls.forEach((url) => { delete url.content; });
 
   const body = new FormData();
-  const file = new Blob([JSON.stringify(copy)], { type: 'application/json' });
+  const file = new Blob([JSON.stringify(proj)], { type: 'application/json' });
   body.append('data', file);
   const opts = { body, method: 'POST' };
   const resp = await daFetch(`${DA_ORIGIN}/source${projPath}.json`, opts);
@@ -173,45 +183,4 @@ export async function rolloutCopy(url, projectTitle) {
   } catch (e) {
     return overwriteCopy(url, projectTitle);
   }
-}
-
-export async function translateCopy(toLang, url, projectTitle) {
-  const dom = await getHtml(url.source);
-  captureDnt(dom);
-  capturePics(dom);
-  const dntedHtml = dom.querySelector('main').outerHTML;
-  const translated = await sendForTranslation(dntedHtml, toLang);
-
-  if (translated) {
-    return new Promise((resolve) => {
-      (() => {
-        const translatedDom = PARSER.parseFromString(translated, 'text/html');
-
-        const mainHtml = releaseDnt(translatedDom);
-
-        const saved = saveToDa(mainHtml, getDaUrl(url));
-
-        const timedout = setTimeout(() => {
-          url.status = 'timeout';
-          resolve('timeout');
-        }, DEFAULT_TIMEOUT);
-
-        saved.then((daResp) => {
-          clearTimeout(timedout);
-          url.status = daResp.ok ? 'success' : 'error';
-          if (daResp.ok) {
-            saveVersion(url.destination, `${projectTitle} Translated`);
-          }
-          resolve();
-        }).catch(() => {
-          clearTimeout(timedout);
-          url.status = 'error';
-          resolve();
-        });
-      })();
-    });
-  }
-
-  url.status = 'error';
-  return null;
 }

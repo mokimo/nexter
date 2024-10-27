@@ -2,7 +2,7 @@ import { LitElement, html, nothing } from '../../../../deps/lit/dist/index.js';
 import { getConfig } from '../../../../scripts/nexter.js';
 import getStyle from '../../../../utils/styles.js';
 import getSvg from '../../../../utils/svg.js';
-import { convertUrl, overwriteCopy, rolloutCopy, formatDate } from '../index.js';
+import { convertUrl, overwriteCopy, rolloutCopy, formatDate, saveStatus } from '../index.js';
 
 const { nxBase } = getConfig();
 const style = await getStyle(import.meta.url);
@@ -16,10 +16,11 @@ const ICONS = [
 
 class NxLocSync extends LitElement {
   static properties = {
-    details: { attribute: false },
+    langs: { attribute: false },
     sourceLang: { attribute: false },
     conflictBehavior: { attribute: false },
     urls: { attribute: false },
+    _canSync: { state: true },
     _status: { state: true },
     _syncDate: { state: true },
   };
@@ -28,24 +29,15 @@ class NxLocSync extends LitElement {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [style, shared, buttons];
     getSvg({ parent: this.shadowRoot, paths: ICONS });
-    this.formatSyncTime();
-  }
-
-  formatSyncTime() {
-    if (this.sourceLang.lastSync) this._syncDate = formatDate(this.sourceLang.lastSync);
   }
 
   syncDone() {
     this._status = undefined;
     this.sourceLang.lastSync = Date.now();
-    this.formatSyncTime();
-    const opts = { detail: true, bubbles: true, composed: true };
-    const event = new CustomEvent('done', opts);
-    this.dispatchEvent(event);
+    saveStatus(this.state);
   }
 
   async syncUrl(url, destLang) {
-    // Delete previous status
     delete url.synced;
     this.requestUpdate();
 
@@ -53,14 +45,14 @@ class NxLocSync extends LitElement {
     const { destination } = convertUrl(opts);
 
     const copyUrl = {
-      source: `/${this.details.org}/${this.details.site}${url.extPath}`,
-      destination: `/${this.details.org}/${this.details.site}${destination}`,
+      source: `${this.sitePath}${url.extPath}`,
+      destination: `${this.sitePath}${destination}`,
     };
 
     if (this.conflictBehavior === 'overwrite') {
-      await overwriteCopy(copyUrl, this.details.title);
+      await overwriteCopy(copyUrl, this.title);
     } else {
-      await rolloutCopy(copyUrl, this.details.title);
+      await rolloutCopy(copyUrl, this.title);
     }
 
     if (copyUrl.status === 'success') url.synced = true;
@@ -85,31 +77,41 @@ class NxLocSync extends LitElement {
     this.shadowRoot.querySelector('.da-loc-panel-content').classList.toggle('is-visible');
   }
 
+  get _canSync() {
+    return this.langs.some((lang) => lang.translation.status === 'not started');
+  }
+
+  renderDate() {
+    if (!this.sourceLang.lastSync) return nothing;
+    const { date, time } = formatDate(this.sourceLang.lastSync);
+    return html`<strong>Last sync:</strong> ${date} at ${time}`;
+  }
+
   render() {
     return html`
       <div class="da-loc-panel">
         <div class="da-loc-panel-title">
-          <h3>Sync <span class="quiet">(${this.sourceLang.name})</span></h3>
+          <h3>Sync ${this.sourceLang.name ? html`<span class="quiet">(${this.sourceLang.name})</span>` : nothing}</h3>
           <div class="da-loc-panel-title-expand">
             <h3>Behavior: <span class="quiet">${this.conflictBehavior}</span></h3>
             <button class="da-loc-panel-expand-btn" @click=${this.toggleExpand} aria-label="Toggle Expand"><svg class="icon"><use href="#spectrum-chevronRight"/></svg></button>
           </div>
         </div>
-        <p class="da-loc-panel-subtitle">Project URLs do not originate from source language used for translation.</p>
+        <p class="da-loc-panel-subtitle">Project URLs are not from the language used for translation.</p>
         <div class="da-loc-panel-content">
           <ul>
             ${this.urls.map((url) => html`
               <li class="da-loc-sync-url">
                 <p>${url.extPath.replace('.html', '')}</p>
-                <p>${this.sourceLang.location}${url.extPath.replace('.html', '')}</p>
+                <p>${this.sourceLang.location}${url.basePath.replace('.html', '')}</p>
                 <div class="da-loc-sync-check ${url.synced ? 'is-visible' : ''}"><svg class="icon"><use href="#spectrum-check"/></svg></div>
               </li>
             `)}
           </ul>
         </div>
         <div class="da-loc-panel-actions">
-          <p>${this._status || html`<strong>Last sync:</strong> ${this._syncDate?.date} at ${this._syncDate?.time}` || nothing}</p>
-          <button class="primary" @click=${this.handleSync}>Sync all</button>
+          <p>${this._status || this.renderDate() || nothing}</p>
+          <button class="primary" @click=${this.handleSync} ?disabled=${!this._canSync}>Sync all</button>
         </div>
       </div>
     `;

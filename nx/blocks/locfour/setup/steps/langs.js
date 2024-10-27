@@ -38,9 +38,11 @@ class NxLocLangs extends LitElement {
   }
 
   async handleLangsStep(options) {
-    const sourceLang = this.langs.find((lang) => lang.name === this.config['source.language']?.value);
-
     const langs = this.langs.filter((lang) => lang.action);
+    langs.forEach((lang) => {
+      lang.rollout = { status: 'not started' };
+      lang.translation = { status: 'not started' };
+    });
 
     const project = {
       title: this.title,
@@ -48,10 +50,16 @@ class NxLocLangs extends LitElement {
       site: this.repo,
       config: this.config,
       options,
-      sourceLang,
       langs,
       urls: normalizeUrls(this.urls, langs),
     };
+
+    // If project has a sourceLang, use it. Otherwise, use the root of the site.
+    if (this.config['source.language']) {
+      project.sourceLang = this.langs.find((lang) => lang.name === this.config['source.language'].value);
+    } else {
+      project.sourceLang = { location: '/' };
+    }
 
     const time = Date.now();
     const body = new FormData();
@@ -76,12 +84,18 @@ class NxLocLangs extends LitElement {
   }
 
   getConflictOpts(name) {
+    // Translate does not support merge (for now)
+    if (name === 'translate.conflict.behavior') {
+      return ['overwrite'];
+    }
+
     if (this.config[name]) {
       return [
         this.config[name].value,
         this.config[name].value === 'merge' ? 'overwrite' : 'merge',
       ];
     }
+
     return [
       'overwrite',
       'merge',

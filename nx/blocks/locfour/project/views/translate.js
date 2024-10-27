@@ -9,7 +9,7 @@ import dntFetch from '../../dnt/dnt.js';
 
 const { nxBase } = getConfig();
 const style = await getStyle(import.meta.url);
-const shared = await getStyle(`${nxBase}/blocks/locfour/project/views/shared.js`);
+const shared = await getStyle(`${nxBase}/blocks/locfour/project/views/shared.css`);
 const buttons = await getStyle(`${nxBase}/styles/buttons.js`);
 
 const ICONS = [
@@ -21,7 +21,6 @@ class NxLocTranslate extends LitElement {
     state: { attribute: false },
     conflictBehavior: { attribute: false },
     config: { attribute: false },
-    details: { attribute: false },
     sourceLang: { attribute: false },
     langs: { attribute: false },
     urls: { attribute: false },
@@ -36,19 +35,9 @@ class NxLocTranslate extends LitElement {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [style, shared, buttons];
     getSvg({ parent: this.shadowRoot, paths: ICONS });
-    this._canTranslate = true;
     this.connectService();
+    this.formatLangs();
     this.formatUrls();
-  }
-
-  setStatus(text) {
-    this._status = text;
-  }
-
-  async saveState() {
-    this._status = 'Saving project state.';
-    await saveStatus(this.state);
-    this._status = undefined;
   }
 
   async connectService() {
@@ -57,33 +46,56 @@ class NxLocTranslate extends LitElement {
     this.toggleActions();
   }
 
+  setStatus(text) {
+    if (text) {
+      this._status = text;
+      return;
+    }
+    this._status = undefined;
+  }
+
+  requestPanelUpdates() {
+    const opts = { detail: true, bubbles: true, composed: true };
+    const event = new CustomEvent('status', opts);
+    this.dispatchEvent(event);
+  }
+
+  async saveState() {
+    await saveStatus(this.state);
+    this.requestPanelUpdates();
+  }
+
   handleConnect() {
     this._service.actions.connect(this._service);
+  }
+
+  formatLangs(status = 'not started') {
+    this.langs.forEach((lang) => {
+      lang.translation.status = status;
+    });
   }
 
   formatUrls() {
     this.urls.forEach((url) => {
       const prefix = this.sourceLang.location === '/' ? '' : this.sourceLang.location;
-      url.srcPath = `/${this.details.org}/${this.details.site}${prefix}${url.basePath}`;
+      url.srcPath = `${this.sitePath}${prefix}${url.basePath}`;
     });
   }
 
   toggleActions() {
     if (this._service.actions.getStatusAll) {
-      const created = this.langs.some((lang) => lang.translation?.status === 'created');
-      this._canTranslate = !created;
-      this._canStatus = created;
+      this._canTranslate = this.langs.some((lang) => lang.translation.status === 'not started');
+      this._canStatus = !this.langs.some((lang) => lang.translation.status === 'complete');
     }
   }
 
   async sendForTranslation() {
-    this._status = 'Sending to translation provider';
+    this.setStatus('Sending to translation provider');
 
     const saveState = this.saveState.bind(this);
     const setStatus = this.setStatus.bind(this);
-    const requestUpdate = this.requestUpdate.bind(this);
 
-    const actions = { setStatus, requestUpdate, saveState };
+    const actions = { setStatus, saveState };
 
     const { details, _service, langs, urls } = this;
     await this._service.actions.sendAllLanguages(details, _service, langs, urls, actions);
@@ -129,11 +141,15 @@ class NxLocTranslate extends LitElement {
   async handleTranslateAll(e) {
     const { target } = e;
     target.disabled = true;
-    const contentSuccess = await this.getSourceContent();
-    if (!contentSuccess) return;
-    const sendSuccess = await this.sendForTranslation();
-    if (!sendSuccess) return;
-    target.disabled = false;
+
+    this.formatLangs('sending');
+    this.requestPanelUpdates();
+
+    // const contentSuccess = await this.getSourceContent();
+    // if (!contentSuccess) return;
+    // const sendSuccess = await this.sendForTranslation();
+    // if (!sendSuccess) return;
+    // target.disabled = false;
   }
 
   async handleSaveLang(e, lang) {
@@ -145,7 +161,7 @@ class NxLocTranslate extends LitElement {
 
     const items = await this._service.actions.getItems(this._service, lang, this.urls);
     const results = await Promise.all(items.map(async (item) => {
-      const path = `/${this.details.org}/${this.details.site}${lang.location}${item.basePath}`;
+      const path = `${this.sitePath}${lang.location}${item.basePath}`;
       const body = new FormData();
       body.append('data', item.blob);
       const opts = { body, method: 'POST' };
@@ -191,9 +207,8 @@ class NxLocTranslate extends LitElement {
 
   renderActions() {
     if (!this._connected) return nothing;
-    if (this._canTranslate) return html`<button class="primary" @click=${this.handleTranslateAll}>Send for translation</button>`;
-    if (this._canStatus) return html`<button class="primary" @click=${this.handleStatus}>Get status</button>`;
-    return nothing;
+    if (this._canTranslate) return html`<button class="primary" @click=${this.handleTranslateAll}>Send all for translation</button>`;
+    return html`<button class="primary" @click=${this.handleStatus} ?disabled=${!this._canStatus}>Get status</button>`;
   }
 
   renderSaveLang(lang) {
@@ -206,7 +221,7 @@ class NxLocTranslate extends LitElement {
         <div class="da-loc-panel-title">
           <h3>Translate <span class="quiet">(${this._service?.name})</span></h3>
           <div class="da-loc-panel-title-expand">
-            <h3>Behavior: <span class="quiet">${this.conflictBehavior}</span></h3>
+            <h3>Behavior: <span class="quiet">overwrite</span></h3>
             <button class="da-loc-panel-expand-btn" @click=${this.toggleExpand} aria-label="Toggle Expand"><svg class="icon"><use href="#spectrum-chevronRight"/></svg></button>
           </div>
         </div>
@@ -214,31 +229,31 @@ class NxLocTranslate extends LitElement {
           <div class="da-lang-cards">
             ${this.langs.map((lang) => html`
               <div class="da-lang-card">
-                <div class="da-card-header ${lang.translation?.status}">
+                <div class="da-card-header ${lang.translation.status}">
                   <div>
                     <p class="da-card-subtitle">Language</p>
                     <p class="da-card-title">${lang.name}</p>
                   </div>
-                  <p class="da-card-badge">${lang.translation?.status}</p>
+                  <p class="da-card-badge">${lang.translation.status}</p>
                 </div>
                 <div class="da-card-content">
                   <div class="da-card-details">
                     <div>
                       <p class="da-card-subtitle">Sent</p>
-                      <p class="da-card-title">${lang.translation?.sent || 0} of ${this.urls.length}</p>
+                      <p class="da-card-title">${lang.translation.sent || 0} of ${this.urls.length}</p>
                     </div>
                     <div>
                       <p class="da-card-subtitle">Translated</p>
-                      <p class="da-card-title">${lang.translation?.translated || 0} of ${this.urls.length}</p>
+                      <p class="da-card-title">${lang.translation.translated || 0} of ${this.urls.length}</p>
                     </div>
                     <div>
                       <p class="da-card-subtitle">Saved</p>
-                      <p class="da-card-title">${lang.translation?.saved || 0} of ${this.urls.length}</p>
+                      <p class="da-card-title">${lang.translation.saved || 0} of ${this.urls.length}</p>
                     </div>
                   </div>
                 </div>
                 <div class="da-card-actions">
-                  ${lang.translation?.translated === this.urls.length ? this.renderSaveLang(lang) : nothing}
+                  ${lang.translation.translated === this.urls.length ? this.renderSaveLang(lang) : nothing}
                 </div>
               </div>
             `)}

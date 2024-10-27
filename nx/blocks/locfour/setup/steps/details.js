@@ -16,6 +16,7 @@ class NxLocDetails extends LitElement {
   static properties = {
     urls: { attribute: false },
     _error: { attribute: false },
+    _title: { attribute: false },
   };
 
   connectedCallback() {
@@ -93,6 +94,10 @@ class NxLocDetails extends LitElement {
     return rawTitle;
   }
 
+  validateTitle({ target }) {
+    this._title = target.value.replaceAll(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+  }
+
   async handleSubmit(e) {
     e.preventDefault();
     const step = 'details';
@@ -126,7 +131,7 @@ class NxLocDetails extends LitElement {
         </div>
         <div>
           <label for="title">Title</label>
-          <input type="text" name="title" value="Demo" />
+          <input type="text" name="title" .value=${this._title || 'demo'} @input=${this.validateTitle} />
         </div>
         <div>
           <label for="urls">URLs</label>
