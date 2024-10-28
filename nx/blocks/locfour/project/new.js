@@ -9,10 +9,14 @@ export default function normalizeUrls(urls, langs) {
   const fullLangs = langs.filter((lang) => lang.location !== '/');
 
   return urls.map((url) => {
-    const urlLang = fullLangs.find((lang) => url.extPath.startsWith(lang.location));
+    const urlLang = fullLangs.find((lang) => {
+      if (url.extPath.startsWith(`${lang.location}/`)) return true;
+      if (url.extPath === `${lang.location}.html`) return true;
+      if (url.extPath === `${lang.location}.json`) return true;
+      return false;
+    });
     const basePath = urlLang ? url.extPath.replace(urlLang.location, '') : url.extPath;
     return {
-      langPath: urlLang ? urlLang.location : '/',
       extPath: url.extPath,
       basePath,
     };

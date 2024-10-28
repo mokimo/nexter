@@ -1,6 +1,6 @@
 import { LitElement, html, nothing } from '../../../deps/lit/dist/index.js';
 import getStyle from '../../../utils/styles.js';
-import { getDetails, saveStatus } from './index.js';
+import { getDetails } from './index.js';
 
 const style = await getStyle(import.meta.url);
 
@@ -14,7 +14,6 @@ class NxLocProject extends LitElement {
     _service: { state: true },
     _sourceLang: { state: true },
     _needsSync: { state: true },
-    _translationStatus: { state: true },
     _status: { state: true },
     _langs: { state: true },
     _urls: { state: true },
@@ -48,11 +47,11 @@ class NxLocProject extends LitElement {
     this._langs = langs;
     this._urls = urls;
 
-    const needsSync = this._sourceLang && this._urls[0].langPath !== this._sourceLang.location;
-    const translateLangs = this._langs.filter((lang) => lang.action === 'translate');
-    const rolloutLangs = this._langs.filter((lang) => lang.locales);
+    const needsSync = urls.some((url) => !url.extPath.startsWith(sourceLang.location));
+    const translateLangs = langs.filter((lang) => lang.action === 'translate');
+    const rolloutLangs = langs.filter((lang) => lang.locales);
 
-    if (needsSync) await this.setupSync(translateLangs, options.sourceConflict);
+    if (needsSync) await this.setupSync(langs, options.sourceConflict);
     if (translateLangs.length > 0) await this.setupTranslate(translateLangs);
     if (rolloutLangs.length > 0) await this.setupRollout(rolloutLangs, options.rolloutConflict);
   }
@@ -88,6 +87,7 @@ class NxLocProject extends LitElement {
     await import('./views/rollout.js');
     const cmp = document.createElement('nx-loc-rollout');
     cmp.state = this._state;
+    cmp.sitePath = this._sitePath;
     cmp.langs = langs;
     cmp.urls = this._urls;
     cmp.conflictBehavior = behavior;

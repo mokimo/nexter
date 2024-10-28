@@ -37,16 +37,13 @@ class NxLocSync extends LitElement {
     saveStatus(this.state);
   }
 
-  async syncUrl(url, destLang) {
+  async syncUrl(url) {
     delete url.synced;
     this.requestUpdate();
 
-    const opts = { path: url.extPath, srcLang: url.langPath, destLang };
-    const { destination } = convertUrl(opts);
-
     const copyUrl = {
       source: `${this.sitePath}${url.extPath}`,
-      destination: `${this.sitePath}${destination}`,
+      destination: `${this.sitePath}${this.sourceLang.location}${url.basePath}`,
     };
 
     if (this.conflictBehavior === 'overwrite') {
@@ -60,14 +57,17 @@ class NxLocSync extends LitElement {
   }
 
   async handleSync(e) {
-    this._status = `Syncing URLs to ${this.sourceLang.name} for translation.`;
     const { target } = e;
     e.target.disabled = true;
-    const { location: destLang } = this.sourceLang;
 
+    let complete = 0;
+    this._status = `Syncing ${this.urls.length} URLs to ${this.sourceLang.name} for translation.`;
     await Promise.all(this.urls.map(async (url) => {
-      await this.syncUrl(url, destLang);
+      await this.syncUrl(url);
+      complete += 1;
+      this._status = `Syncing ${this.urls.length - complete} URLs to ${this.sourceLang.name} for translation.`;
     }));
+
     target.disabled = false;
     this.syncDone();
   }

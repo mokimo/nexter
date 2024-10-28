@@ -40,7 +40,10 @@ class NxLocLangs extends LitElement {
   async handleLangsStep(options) {
     const langs = this.langs.filter((lang) => lang.action);
     langs.forEach((lang) => {
-      lang.rollout = { status: 'not started' };
+      lang.rollout = {
+        status: lang.action === 'rollout' ? 'ready' : 'not started',
+        ready: lang.action === 'rollout' ? this.urls.length : undefined,
+      };
       lang.translation = { status: 'not started' };
     });
 

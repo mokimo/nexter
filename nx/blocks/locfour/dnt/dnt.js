@@ -1,3 +1,4 @@
+import { DA_ORIGIN } from '../../../public/utils/constants.js';
 import { daFetch } from '../../../utils/daFetch.js';
 
 const ROW_DNT = '.section-metadata > div';
@@ -50,4 +51,17 @@ export default async function dntFetch(url, type) {
   } catch {
     return { ...RESP_ERROR, status: 520 };
   }
+}
+
+export async function dntFetchAll(urls) {
+  // Get all the source content
+  await Promise.all(urls.map(async (url) => {
+    const result = await dntFetch(`${DA_ORIGIN}/source${url.srcPath}`, 'capture');
+    if (result.error) {
+      url.error = result.error;
+      url.status = result.status;
+      return;
+    }
+    url.content = result;
+  }));
 }

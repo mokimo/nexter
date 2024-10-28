@@ -2,7 +2,6 @@ import { LitElement, html, nothing } from '../../deps/lit/lit-core.min.js';
 import { getConfig } from '../../scripts/nexter.js';
 import { crawl } from '../../public/utils/tree.js';
 import getStyle from '../../utils/styles.js';
-import { daFetch } from '../../utils/daFetch.js';
 
 const { nxBase } = getConfig();
 const style = await getStyle(import.meta.url);

@@ -1,5 +1,4 @@
 import { regionalDiff, removeLocTags } from '../regional-diff/regional-diff.js';
-import { sendForTranslation } from '../google/index.js';
 import { daFetch, saveToDa } from '../../../utils/daFetch.js';
 
 const DA_ORIGIN = 'https://admin.da.live';
@@ -23,11 +22,17 @@ export function formatDate(timestamp) {
   return { date, time };
 }
 
+export function calculateTime(startTime) {
+  const crawlTime = Date.now() - startTime;
+  return `${String(crawlTime / 1000).substring(0, 4)}s`;
+}
+
 export async function detectService(config) {
   const name = config['translation.service.name']?.value;
   if (name === 'GLaaS') {
     return {
       name: 'GLaaS',
+      canResave: true,
       origin: config['translation.service.stage.origin'].value,
       clientid: config['translation.service.stage.clientid'].value,
       actions: await import('../glaas/index.js'),
@@ -36,6 +41,7 @@ export async function detectService(config) {
   return {
     name: 'Google',
     origin: 'https://translate.da/live',
+    canResave: false,
     actions: await import('../google/index.js'),
   };
 }
@@ -67,7 +73,7 @@ export async function saveStatus(json) {
   // Re-parse for other uses
   const proj = JSON.parse(projJson);
 
-  // Do not save URL content
+  // Do not persist source content
   proj.urls.forEach((url) => { delete url.content; });
 
   const body = new FormData();
@@ -87,34 +93,12 @@ async function saveVersion(path, label) {
   return res;
 }
 
-export async function overwriteCopy(url, projectTitle) {
+export async function overwriteCopy(url) {
   const body = new FormData();
   body.append('destination', url.destination);
   const opts = { method: 'POST', body };
-
-  return new Promise((resolve) => {
-    (() => {
-      const fetched = daFetch(`${DA_ORIGIN}/copy${url.source}`, opts);
-
-      const timedout = setTimeout(() => {
-        url.status = 'timeout';
-        resolve('timeout');
-      }, DEFAULT_TIMEOUT);
-
-      fetched.then((resp) => {
-        clearTimeout(timedout);
-        url.status = resp.ok ? 'success' : 'error';
-        if (resp.ok) {
-          saveVersion(url.destination, `${projectTitle} - Rolled Out`);
-        }
-        resolve();
-      }).catch(() => {
-        clearTimeout(timedout);
-        url.status = 'error';
-        resolve();
-      });
-    })();
-  });
+  return daFetch(`${DA_ORIGIN}/copy${url.source}`, opts);
+  // saveVersion(url.destination, `${projectTitle} - Rolled Out`);
 }
 
 const collapseWhitespace = (str) => str.replace(/\s+/g, ' ');
@@ -183,4 +167,45 @@ export async function rolloutCopy(url, projectTitle) {
   } catch (e) {
     return overwriteCopy(url, projectTitle);
   }
+}
+
+export async function saveLangItems(sitePath, items, lang) {
+  return Promise.all(items.map(async (item) => {
+    const path = `${sitePath}${lang.location}${item.basePath}`;
+    const body = new FormData();
+    body.append('data', item.blob);
+    const opts = { body, method: 'POST' };
+    try {
+      const resp = await daFetch(`${DA_ORIGIN}/source${path}`, opts);
+      return { success: resp.status };
+    } catch {
+      return { error: 'Could not save documents' };
+    }
+  }));
+}
+
+/**
+ * Run a function with a maximum timeout.
+ * If the timeout limit hits, resolve the still in progress promise.
+ *
+ * @param {Function} fn the function to run
+ * @param {Number} timeout the miliseconds to wait before timing out.
+ * @returns the results of the function
+ */
+export async function timeoutWrapper(fn, timeout = DEFAULT_TIMEOUT) {
+  return new Promise((resolve) => {
+    const loading = fn();
+
+    const timedout = setTimeout(() => {
+      resolve({ error: 'timeout', loading });
+    }, timeout);
+
+    loading.then((result) => {
+      clearTimeout(timedout);
+      resolve(result);
+    }).catch((error) => {
+      clearTimeout(timedout);
+      resolve({ error });
+    });
+  });
 }

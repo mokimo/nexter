@@ -1,5 +1,6 @@
-// eslint-disable-next-line import/prefer-default-export
-export async function sendForTranslation(sourceHtml, toLang) {
+const results = {};
+
+async function sendForTranslation(basePath, sourceHtml, toLang) {
   const body = new FormData();
   body.append('data', sourceHtml);
   body.append('fromlang', 'en');
@@ -12,10 +13,39 @@ export async function sendForTranslation(sourceHtml, toLang) {
     console.log(resp.status);
     return null;
   }
-  const json = await resp.json();
-  return json.translated;
+  const { translated } = await resp.json();
+  if (translated) {
+    const blob = new Blob([translated], { type: 'text/html' });
+    return { basePath, blob };
+  }
+  return null;
 }
 
 export async function isConnected() {
   return true;
+}
+
+export async function getItems(service, lang) {
+  return results[lang.code];
+}
+
+export async function sendAllLanguages(title, service, langs, urls) {
+  await Promise.all(langs.map(async (lang) => {
+    lang.translation.sent = urls.length;
+
+    const urlResults = await Promise.all(
+      urls.map(async (url) => sendForTranslation(url.basePath, url.content, lang.code)),
+    );
+
+    const success = urlResults.filter((result) => result).length;
+    lang.translation.translated = success;
+    if (success === urls.length) {
+      lang.translation.status = 'translated';
+      results[lang.code] = urlResults;
+    }
+  }));
+}
+
+export async function getStatusAll(title, _service, langs, actions) {
+  // Not implemented
 }

@@ -1,11 +1,9 @@
 import { LitElement, html, nothing } from '../../../../deps/lit/dist/index.js';
-import { DA_ORIGIN } from '../../../../public/utils/constants.js';
-import { daFetch } from '../../../../utils/daFetch.js';
 import { getConfig } from '../../../../scripts/nexter.js';
 import getStyle from '../../../../utils/styles.js';
 import getSvg from '../../../../utils/svg.js';
-import { detectService, saveStatus } from '../index.js';
-import dntFetch from '../../dnt/dnt.js';
+import { detectService, saveLangItems, saveStatus, formatDate } from '../index.js';
+import { dntFetchAll } from '../../dnt/dnt.js';
 
 const { nxBase } = getConfig();
 const style = await getStyle(import.meta.url);
@@ -19,16 +17,13 @@ const ICONS = [
 class NxLocTranslate extends LitElement {
   static properties = {
     state: { attribute: false },
-    conflictBehavior: { attribute: false },
     config: { attribute: false },
     sourceLang: { attribute: false },
     langs: { attribute: false },
     urls: { attribute: false },
     _status: { state: true },
     _connected: { state: true },
-    _canTranslate: { state: true },
-    _service: { state: true },
-    _canStatus: { state: true },
+    _fetchingStatus: { state: true },
   };
 
   connectedCallback() {
@@ -36,22 +31,17 @@ class NxLocTranslate extends LitElement {
     this.shadowRoot.adoptedStyleSheets = [style, shared, buttons];
     getSvg({ parent: this.shadowRoot, paths: ICONS });
     this.connectService();
-    this.formatLangs();
     this.formatUrls();
   }
 
   async connectService() {
     this._service = await detectService(this.config);
+    this._actions = this._service.actions;
     this._connected = await this._service.actions.isConnected(this._service);
-    this.toggleActions();
   }
 
   setStatus(text) {
-    if (text) {
-      this._status = text;
-      return;
-    }
-    this._status = undefined;
+    this._status = text;
   }
 
   requestPanelUpdates() {
@@ -63,16 +53,11 @@ class NxLocTranslate extends LitElement {
   async saveState() {
     await saveStatus(this.state);
     this.requestPanelUpdates();
+    this.requestUpdate();
   }
 
   handleConnect() {
-    this._service.actions.connect(this._service);
-  }
-
-  formatLangs(status = 'not started') {
-    this.langs.forEach((lang) => {
-      lang.translation.status = status;
-    });
+    this._actions.connect(this._service);
   }
 
   formatUrls() {
@@ -82,52 +67,61 @@ class NxLocTranslate extends LitElement {
     });
   }
 
-  toggleActions() {
-    if (this._service.actions.getStatusAll) {
-      this._canTranslate = this.langs.some((lang) => lang.translation.status === 'not started');
-      this._canStatus = !this.langs.some((lang) => lang.translation.status === 'complete');
+  async handleSaveLang(lang) {
+    this.setStatus(`Saving ${lang.translation.translated} items for ${lang.name}.`);
+    lang.translation.status = 'saving';
+    lang.translation.saved = 0;
+    this.requestUpdate();
+
+    const items = await this._actions.getItems(this._service, lang, this.urls);
+    const results = await saveLangItems(this.sitePath, items, lang);
+
+    const success = results.filter((result) => (result.success)).length;
+    lang.translation.saved = success;
+    if (success === this.urls.length) {
+      lang.translation.status = 'complete';
+      lang.rollout = {
+        status: 'ready',
+        ready: success,
+      };
+    }
+    this.setStatus();
+    this.saveState();
+  }
+
+  async autoSaveLangs() {
+    const autoSaveLangs = this.langs.filter((lang) => {
+      const { translated, saved } = lang.translation;
+      return translated === this.urls.length && (!saved || saved === 0);
+    });
+
+    for (const lang of autoSaveLangs) {
+      await this.handleSaveLang(lang);
     }
   }
 
-  async sendForTranslation() {
-    this.setStatus('Sending to translation provider');
-
-    const saveState = this.saveState.bind(this);
-    const setStatus = this.setStatus.bind(this);
-
-    const actions = { setStatus, saveState };
-
-    const { details, _service, langs, urls } = this;
-    await this._service.actions.sendAllLanguages(details, _service, langs, urls, actions);
-
-    this._status = undefined;
-    this.toggleActions();
-  }
-
   async handleStatus() {
-    const saveState = this.saveState.bind(this);
+    this._fetchingStatus = true;
     const setStatus = this.setStatus.bind(this);
+    const saveState = this.saveState.bind(this);
 
-    const actions = { setStatus, saveState };
+    const { title, _service, langs, urls } = this;
+    await this._actions.getStatusAll(title, _service, langs, urls, { setStatus, saveState });
 
-    const { _service, langs } = this;
-    await this._service.actions.getStatusAll(_service, langs, actions);
-    this.requestUpdate();
+    await this.autoSaveLangs();
+
+    if (this._completeLangs === this.langs.length) {
+      this.state.translateComplete = Date.now();
+      this.saveState();
+    }
+
+    this._fetchingStatus = false;
   }
 
   async getSourceContent() {
     this._status = 'Getting source content';
 
-    // Get all the source content
-    await Promise.all(this.urls.map(async (url) => {
-      const result = await dntFetch(`${DA_ORIGIN}/source${url.srcPath}`, 'capture');
-      if (result.error) {
-        url.error = result.error;
-        url.status = result.status;
-        return;
-      }
-      url.content = result;
-    }));
+    await dntFetchAll(this.urls);
 
     // Check for errors
     this._errors = this.urls.filter((url) => url.error);
@@ -138,56 +132,64 @@ class NxLocTranslate extends LitElement {
     return true;
   }
 
+  async sendForTranslation() {
+    this.setStatus('Sending to translation provider');
+
+    const actions = {
+      setStatus: this.saveState.bind(this),
+      saveState: this.setStatus.bind(this),
+    };
+
+    const { title, _service, langs, urls } = this;
+    await this._actions.sendAllLanguages(title, _service, langs, urls, actions);
+
+    return !this.langs.some((lang) => lang.translation.error && lang.translation.error > 0);
+  }
+
   async handleTranslateAll(e) {
     const { target } = e;
     target.disabled = true;
 
-    this.formatLangs('sending');
+    // Ensure sync is disabled during send
+    this.langs.forEach((lang) => { lang.translation.status = 'sending'; });
     this.requestPanelUpdates();
 
-    // const contentSuccess = await this.getSourceContent();
-    // if (!contentSuccess) return;
-    // const sendSuccess = await this.sendForTranslation();
-    // if (!sendSuccess) return;
-    // target.disabled = false;
-  }
+    const contentSuccess = await this.getSourceContent();
+    if (!contentSuccess) return;
 
-  async handleSaveLang(e, lang) {
-    const { target } = e;
-    target.disabled = true;
+    const sendSuccess = await this.sendForTranslation();
+    if (!sendSuccess) return;
 
-    lang.translation.status = 'saving';
-    this.requestUpdate();
-
-    const items = await this._service.actions.getItems(this._service, lang, this.urls);
-    const results = await Promise.all(items.map(async (item) => {
-      const path = `${this.sitePath}${lang.location}${item.basePath}`;
-      const body = new FormData();
-      body.append('data', item.blob);
-      const opts = { body, method: 'POST' };
-      try {
-        const resp = await daFetch(`${DA_ORIGIN}/source${path}`, opts);
-        return { success: resp.status };
-      } catch {
-        return { error: 'Could not save documents' };
-      }
-    }));
-
-    const success = results.filter((result) => (result.success)).length;
-    lang.translation.saved = success;
-    if (success === this.urls.length) {
-      lang.translation.status = 'complete';
-      lang.rollout = { status: 'ready' };
-    }
-    this.saveState();
-
-    target.disabled = false;
-    this.requestUpdate();
+    // Get an initial status after send
+    this.handleStatus();
   }
 
   toggleExpand() {
     this.shadowRoot.querySelector('.da-loc-panel-expand-btn').classList.toggle('rotate');
     this.shadowRoot.querySelector('.da-loc-panel-content').classList.toggle('is-visible');
+  }
+
+  get _translateComplete() {
+    return this.state.translateComplete;
+  }
+
+  get _completeLangs() {
+    return this.langs.filter((lang) => lang.translation.status === 'complete').length;
+  }
+
+  get _canStatus() {
+    if (this._fetchingStatus) return false;
+    return this._completeLangs < this.langs.length;
+  }
+
+  get _canTranslate() {
+    return this.langs.some((lang) => lang.translation.status === 'not started');
+  }
+
+  renderDate() {
+    if (!this._translateComplete) return nothing;
+    const { date, time } = formatDate(this._translateComplete);
+    return html`<strong>Completed:</strong> ${date} at ${time}.`;
   }
 
   renderErrors() {
@@ -206,13 +208,14 @@ class NxLocTranslate extends LitElement {
   }
 
   renderActions() {
-    if (!this._connected) return nothing;
+    if (!this._connected) return html`<button class="primary" @click=${this.handleConnect}>Connect</button>`;
     if (this._canTranslate) return html`<button class="primary" @click=${this.handleTranslateAll}>Send all for translation</button>`;
     return html`<button class="primary" @click=${this.handleStatus} ?disabled=${!this._canStatus}>Get status</button>`;
   }
 
   renderSaveLang(lang) {
-    return html`<button class="primary" @click=${(e) => { this.handleSaveLang(e, lang); }}>Save</button>`;
+    if (lang.translation.saved && !this._service?.canResave) return nothing;
+    return html`<button class="primary" @click=${() => { this.handleSaveLang(lang); }} ?disabled=${lang.translation.status === 'saving'}>${lang.translation.saved ? 'Re-save' : 'Save'}</button>`;
   }
 
   render() {
@@ -253,6 +256,7 @@ class NxLocTranslate extends LitElement {
                   </div>
                 </div>
                 <div class="da-card-actions">
+                  <p></p>
                   ${lang.translation.translated === this.urls.length ? this.renderSaveLang(lang) : nothing}
                 </div>
               </div>
@@ -261,8 +265,8 @@ class NxLocTranslate extends LitElement {
         </div>
         ${this._errors?.length > 0 ? this.renderErrors() : nothing}
         <div class="da-loc-panel-actions">
-          <p>${this._status}</p>
-          ${this._connected === false ? html`<button class="primary" @click=${this.handleConnect}>Connect</button>` : this.renderActions()}
+          <p>${this._status || this.renderDate() || nothing}</p>
+          ${this.renderActions()}
         </div>
       </div>
     `;

@@ -2,6 +2,8 @@ import { LitElement, html, nothing } from '../../../../deps/lit/dist/index.js';
 import { getConfig } from '../../../../scripts/nexter.js';
 import getSvg from '../../../../utils/svg.js';
 import getStyle from '../../../../utils/styles.js';
+import { calculateTime, formatDate, overwriteCopy, saveStatus, timeoutWrapper } from '../index.js';
+import { Queue } from '../../../../public/utils/tree.js';
 
 const { nxBase } = getConfig();
 const style = await getStyle(import.meta.url);
@@ -24,6 +26,7 @@ class NxLocRollout extends LitElement {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [style, shared, buttons];
     getSvg({ parent: this.shadowRoot, paths: ICONS });
+    setTimeout(() => { this.toggleExpand(); }, 100);
   }
 
   toggleExpand() {
@@ -32,17 +35,45 @@ class NxLocRollout extends LitElement {
   }
 
   async handleRolloutLang(lang) {
-    if (!lang.rollout) return;
+    // Don't rollout if already rolling out
+    if (lang.rollout.status === 'rolling out') return;
+
+    const startTime = Date.now();
+    lang.rollout.status = 'rolling out';
+    lang.rolloutDate = undefined;
+    lang.rolloutTime = undefined;
     lang.rolledOut = 0;
-    lang.locales.map((locale) => {
-      this.urls.forEach(async (url) => {
-        const sourcePath = `${this.details.sitePrefix}${lang.location}${url.basePath}`;
-        const destPath = `${this.details.sitePrefix}${locale.code}${url.basePath}`;
-        console.log(destPath);
-        lang.rolledOut += 1;
+    lang.errors = [];
+    const items = lang.locales.reduce((acc, locale) => {
+      const localeItems = this.urls.map((url) => {
+        const source = `${this.sitePath}${lang.location}${url.basePath}`;
+        const destination = `${this.sitePath}${locale.code}${url.basePath}`;
+        return async () => {
+          const resp = await overwriteCopy({ source, destination });
+          if (resp.ok || resp.error === 'timeout') {
+            lang.rolledOut += 1;
+            this.requestUpdate();
+          } else {
+            console.log('there was an error');
+            lang.errors.push({ source, destination });
+          }
+        };
       });
-      this.requestUpdate();
-    });
+      acc.push(...localeItems);
+      return acc;
+    }, []);
+
+    const queue = new Queue(timeoutWrapper, 50);
+    await Promise.all(items.map((item) => queue.push(item)));
+    if (lang.rolledOut === items.length) {
+      lang.rollout.status = 'complete';
+      lang.rolloutDate = Date.now();
+      lang.rolloutTime = calculateTime(startTime);
+    } else {
+      lang.rollout.status = 'ready';
+    }
+    saveStatus(this.state);
+    this.requestUpdate();
   }
 
   async handleRolloutAll() {
@@ -52,14 +83,14 @@ class NxLocRollout extends LitElement {
   }
 
   getLangStatus(lang) {
-    if (lang.rollout?.status) return lang.rollout.status;
+    if (lang.rollout.status) return lang.rollout.status;
     if (lang.action === 'rollout') return 'ready';
     return 'not ready';
   }
 
   canRollout(lang) {
-    if (lang.action === 'rollout') return true;
-    if (lang.rollout?.status === 'ready') return true;
+    if (lang.rollout.status === 'ready') return true;
+    if (lang.rollout.status === 'complete') return true;
     return false;
   }
 
@@ -73,8 +104,17 @@ class NxLocRollout extends LitElement {
   }
 
   get _canRolloutAll() {
-    const ready = this.langs.filter((lang) => lang.action === 'rollout' || lang.rollout?.status === 'ready');
+    const ready = this.langs.filter((lang) => lang.rollout.status === 'ready' || lang.rollout.status === 'complete');
     return this.langs.length === ready.length;
+  }
+
+  renderRolloutDate(lang) {
+    if (!lang.rolloutDate) return nothing;
+    const { date, time } = formatDate(lang.rolloutDate);
+    return html`
+      <p class="da-card-date-heading">LAST ROLLOUT ${lang.rolloutTime ? html`- ${lang.rolloutTime}` : nothing}</p>
+      <p class="da-card-date">${date} at ${time}</p>
+    `;
   }
 
   render() {
@@ -114,7 +154,8 @@ class NxLocRollout extends LitElement {
                   </div>
                 </div>
                 <div class="da-card-actions">
-                  ${this.canRollout(lang) ? html`<button class="primary" @click=${() => this.handleRolloutLang(lang)}>Rollout</button>` : nothing}
+                  <div>${this.renderRolloutDate(lang)}</div>
+                  <button class="primary" @click=${() => this.handleRolloutLang(lang)} ?disabled=${!this.canRollout(lang)}>Rollout</button>
                 </div>
               </div>
             `)}

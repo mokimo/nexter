@@ -1,5 +1,9 @@
 import makeBatches from '../../../public/utils/batch.js';
 
+async function throttle(ms = 500) {
+  return new Promise((resolve) => { setTimeout(() => { resolve(); }, ms); });
+}
+
 function getOpts(clientid, token, body, contentType, method = 'GET') {
   const opts = {
     method,
@@ -60,8 +64,9 @@ export async function getTask({ origin, clientid, token, workflow, name }) {
   }
 }
 
-export async function addAssets({ origin, clientid, token, task, items, setStatus }) {
+export async function addAssets({ origin, clientid, token, langs, task, items }, actions) {
   const { name, workflow, targetLocales } = task;
+  const { setStatus, saveState, updateLangTask } = actions;
 
   task.sent ??= 0;
   task.error ??= 0;
@@ -96,11 +101,17 @@ export async function addAssets({ origin, clientid, token, task, items, setStatu
     }));
     task.sent += results.filter((result) => (result.status)).length;
     task.error += results.filter((result) => (result.error)).length;
+    updateLangTask(task, langs);
+    saveState();
   }
   if (task.error === 0) task.status = 'uploaded';
 }
 
 export async function updateStatus(service, token, task) {
+  console.log(Date.now());
+  await throttle(1000);
+  console.log(Date.now());
+
   const { origin, clientid } = service;
   const { name, workflow, targetLocales } = task;
   const body = new FormData();

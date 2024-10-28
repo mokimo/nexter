@@ -93,12 +93,16 @@ p {
   color: #fff;
 }
 
-.da-card-header.translated {
+.da-card-header.translated,
+.da-card-header.ready,
+.da-card-header.rolling-out,
+.da-card-header.saving {
   background: #087e89;
 }
 
 .da-card-header.created,
-.da-card-header.ready {
+.da-card-header.uploaded,
+.da-card-header.sending {
   background: #0b78b3;
 }
 
@@ -136,12 +140,12 @@ p {
 
 .da-card-details {
   display: grid;
-  grid-template-columns: 0.8fr 1.2fr 1fr;
+  grid-template-columns: 1fr 1.1fr 0.9fr;
   margin-bottom: var(--spacing-400);
 }
 
 .da-card-details.rollout {
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
 }
 
 .da-card-locales {
@@ -154,8 +158,20 @@ p {
 
 .da-card-actions {
   display: flex;
-  justify-content: end;
+  justify-content: space-between;
+  align-items: center;
   padding: 0 var(--spacing-400) var(--spacing-400) var(--spacing-400);
+}
+
+.da-card-date-heading {
+  color: var(--s2-gray-700);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.da-card-date {
+  color: var(--s2-gray-700);
+  font-size: 14px;
 }
 
 .icon {
