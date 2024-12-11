@@ -66,11 +66,22 @@ export async function triggerJob(urls) {
     const resp = await daFetch(aemUrl, opts);
 
     if (resp.status !== 202) {
-      return { status: resp.status, message: 'Job failed to trigger.' };
+      return { error: resp.status, message: 'Job failed to trigger.' };
     }
-    return await resp.json();
+    return resp.json();
   } catch (error) {
-    return { status: 500, message: 'Job failed to trigger.' };
+    return { error, message: 'Job failed to trigger.' };
+  }
+}
+
+export async function cancelJob(jobUrl) {
+  try {
+    const opts = { method: 'DELETE' };
+    const job = await daFetch(jobUrl, opts);
+    const result = await job.json();
+    return result;
+  } catch (error) {
+    return error;
   }
 }
 

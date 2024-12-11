@@ -4,7 +4,7 @@ import { getConfig } from '../../scripts/nexter.js';
 import getStyle from '../../utils/styles.js';
 import getSvg from '../../utils/svg.js';
 
-import { formatUrls, getJobStatus, triggerJob } from './index.js';
+import { cancelJob, formatUrls, getJobStatus, triggerJob } from './index.js';
 
 const { nxBase } = getConfig();
 const style = await getStyle(import.meta.url);
@@ -21,6 +21,7 @@ const MOCK_URLS = 'https://main--bacom-sandbox--adobecom.hlx.live/\nhttps://main
 class NxBulk extends LitElement {
   static properties = {
     _jobStatus: { state: true },
+    _jobUrl: { state: true },
     _baseUrls: { state: true },
     _successUrls: { state: true },
     _errorUrls: { state: true },
@@ -28,6 +29,7 @@ class NxBulk extends LitElement {
     _cancel: { state: true },
     _cancelText: { state: true },
     _showVersion: { state: true },
+    _error: { attribute: false },
   };
 
   constructor() {
@@ -47,14 +49,16 @@ class NxBulk extends LitElement {
       this._jobStatus = jobStatus.progress;
       this._jobStatus.stopped = jobStatus.state === 'stopped';
     }
-
-    if (jobStatus.data?.resources) {
+    if (jobStatus.cancelled) {
+      this.resetState();
+    } else if (jobStatus.data?.resources) {
       this._successUrls = jobStatus.data.resources.filter(
         (res) => SUCCESS_CODES.includes(res.status),
       );
       this._errorUrls = jobStatus.data.resources.filter(
-        (res) => !SUCCESS_CODES.includes(res.status),
+        (res) => res.status && !SUCCESS_CODES.includes(res.status),
       );
+      this._baseUrls = jobStatus.data.resources.filter((res) => !res.status);
     }
     this.requestUpdate();
   }
@@ -83,22 +87,33 @@ class NxBulk extends LitElement {
     this._baseUrls = [];
     this._successUrls = [];
     this._errorUrls = [];
+    this._error = '';
     this._jobStatus = {
       stopped: false,
       total: 0,
       processed: 0,
       failed: 0,
       success: 0,
+      notmodified: 0,
     };
+    this._jobUrl = '';
+    if (this.shadowRoot) {
+      const cards = this.shadowRoot.querySelectorAll('.detail-card');
+      const lists = this.shadowRoot.querySelectorAll('.url-list');
+      [...cards, ...lists].forEach((el) => { el.classList.remove('is-expanded'); });
+    }
   }
 
   handleDeleteCheck() {
     this._isDelete = !this._isDelete;
   }
 
-  handleCancel() {
+  async handleCancel() {
     this._cancel = true;
     this._cancelText = 'Canceling';
+    if (this._jobUrl && !this._jobStatus.stopped) {
+      await cancelJob(this._jobUrl);
+    }
   }
 
   handleToggleList(e) {
@@ -126,12 +141,13 @@ class NxBulk extends LitElement {
     this._baseUrls = formatUrls(urls, action, hasDelete);
     const jobResult = await triggerJob(this._baseUrls, label);
 
-    if (jobResult.status !== 202) {
+    if (jobResult.error) {
       this.resetState();
-      // TODO error message toast
+      this._error = jobResult.message || 'Something went wrong.';
       return;
     }
 
+    this._jobUrl = jobResult.links.self;
     await this.pollJobStatus(jobResult, (status) => {
       this.processJobStatus(status);
     });
@@ -143,6 +159,10 @@ class NxBulk extends LitElement {
 
   get _totalCount() {
     return this._jobStatus.total || this._baseUrls.length;
+  }
+
+  get _successCount() {
+    return this._jobStatus.success + this._jobStatus.notmodified;
   }
 
   get _remainingCount() {
@@ -177,7 +197,7 @@ class NxBulk extends LitElement {
         <ul class="urls-result">
           ${urls.map((url) => html`
             <li>
-              <div class="url-path">${url.path}</div>
+              <div class="url-path">${url.path || url.webPath || url.pathname}</div>
               <div class="url-status result-${url.status ? url.status : 'waiting'}">
                 ${url.status ? url.status : 'waiting'}
               </div>
@@ -212,11 +232,13 @@ class NxBulk extends LitElement {
         </div>
       </form>
       <div class="detail-cards">
-        ${this.renderBadge('Remaining', this._remainingCount, this._remainingCount > 1)}
+        ${this.renderBadge('Remaining', this._remainingCount, this._remainingCount > 1 && !this._jobStatus.stopped)}
         ${this.renderBadge('Errors', this._jobStatus.failed)}
-        ${this.renderBadge('Success', this._jobStatus.success)}
+        ${this.renderBadge('Success', this._successCount)}
         ${this.renderBadge('Total', this._totalCount)}
       </div>
+      ${this._error ? html`<p class="error">${this._error}</p>` : nothing}
+      ${this.renderList('Remaining', this._baseUrls)}
       ${this.renderList('Errors', this._errorUrls)}
       ${this.renderList('Success', this._successUrls)}
     `;
