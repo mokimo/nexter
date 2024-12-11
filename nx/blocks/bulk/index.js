@@ -51,3 +51,41 @@ export async function sendAction(url, label) {
   }
   return url;
 }
+
+export async function triggerJob(urls) {
+  try {
+    const method = urls[0].hasDelete ? 'DELETE' : 'POST';
+    const opts = { method };
+    const origin = isBulkDa(urls[0]?.action) ? DA_ORIGIN : AEM_ORIGIN;
+
+    opts.body = JSON.stringify({ paths: urls.map((url) => url.pathname) });
+    opts.headers = { 'Content-Type': 'application/json; charset=utf-8' };
+
+    // TODO remove CI version from URL
+    const aemUrl = `${origin}/${urls[0].action}/${urls[0].org}/${urls[0].repo}/${urls[0].ref}/*?hlx-admin-version=ci`;
+    const resp = await daFetch(aemUrl, opts);
+
+    if (resp.status !== 202) {
+      return { status: resp.status, message: 'Job failed to trigger.' };
+    }
+    return await resp.json();
+  } catch (error) {
+    return { status: 500, message: 'Job failed to trigger.' };
+  }
+}
+
+export async function getJobStatus(jobUrl, force = false) {
+  if (!force) {
+    await new Promise((resolve) => {
+      setTimeout(() => resolve(), 1000);
+    });
+  }
+  try {
+    const opts = { method: 'GET' };
+    const status = await daFetch(jobUrl, opts);
+    const result = await status.json();
+    return result;
+  } catch (error) {
+    return error;
+  }
+}
