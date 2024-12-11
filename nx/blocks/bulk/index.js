@@ -54,12 +54,11 @@ export async function sendAction(url, label) {
 
 export async function triggerJob(urls) {
   try {
-    const method = urls[0].hasDelete ? 'DELETE' : 'POST';
-    const opts = { method };
-    const origin = isBulkDa(urls[0]?.action) ? DA_ORIGIN : AEM_ORIGIN;
+    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' } };
+    const origin = AEM_ORIGIN;
 
-    opts.body = JSON.stringify({ paths: urls.map((url) => url.pathname) });
-    opts.headers = { 'Content-Type': 'application/json; charset=utf-8' };
+    const deleteJob = !!urls[0].hasDelete;
+    opts.body = JSON.stringify({ paths: urls.map((url) => url.pathname), delete: deleteJob });
 
     // TODO remove CI version from URL
     const aemUrl = `${origin}/${urls[0].action}/${urls[0].org}/${urls[0].repo}/${urls[0].ref}/*?hlx-admin-version=ci`;
