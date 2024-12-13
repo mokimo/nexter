@@ -61,7 +61,7 @@ export async function triggerJob(urls) {
     opts.body = JSON.stringify({ paths: urls.map((url) => url.pathname), delete: deleteJob });
 
     // TODO remove CI version from URL
-    const aemUrl = `${origin}/${urls[0].action}/${urls[0].org}/${urls[0].repo}/${urls[0].ref}/*?hlx-admin-version=ci`;
+    const aemUrl = `${origin}/${urls[0].action}/${urls[0].org}/${urls[0].repo}/${urls[0].ref}/*?hlx-admin-version=ci12312331072`;
     const resp = await daFetch(aemUrl, opts);
 
     if (resp.status !== 202) {

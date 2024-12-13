@@ -75,7 +75,7 @@ class NxBulk extends LitElement {
       if (status) setProgress(status);
     }
     if (stopped) {
-      jobStatus = await getJobStatus(`${job.links.self}/details`, true);
+      jobStatus = await getJobStatus(`${jobStatus.links.details}`, true);
       setProgress(jobStatus);
     }
     return jobStatus;
