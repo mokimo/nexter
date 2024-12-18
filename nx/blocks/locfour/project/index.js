@@ -1,4 +1,4 @@
-import { regionalDiff, removeLocTags } from '../regional-diff/regional-diff.js';
+import { diffHtml, removeLocTags } from '../diff-html/old_ver_diffHtml.js';
 import { daFetch, saveToDa } from '../../../utils/daFetch.js';
 import { releaseDnt } from '../dnt/dnt.js';
 
@@ -28,16 +28,15 @@ export function calculateTime(startTime) {
   return `${String(crawlTime / 1000).substring(0, 4)}s`;
 }
 
-export async function detectService(config, env = 'stage') {
+export async function detectService(config) {
   const name = config['translation.service.name']?.value;
   if (name === 'GLaaS') {
     return {
       name: 'GLaaS',
       canResave: true,
-      origin: config[`translation.service.${env}.origin`].value,
-      clientid: config[`translation.service.${env}.clientid`].value,
+      origin: config['translation.service.stage.origin'].value,
+      clientid: config['translation.service.stage.clientid'].value,
       actions: await import('../glaas/index.js'),
-      dnt: await import('../glaas/dnt.js'),
     };
   }
   return {
@@ -96,18 +95,11 @@ async function saveVersion(path, label) {
 }
 
 export async function overwriteCopy(url, title) {
-  const srcResp = await daFetch(`${DA_ORIGIN}/source${url.source}`);
-  if (!srcResp.ok) {
-    url.status = 'error';
-    return srcResp;
-  }
-  const blob = await srcResp.blob();
   const body = new FormData();
-  body.append('data', blob);
+  body.append('destination', url.destination);
   const opts = { method: 'POST', body };
-  const daResp = await daFetch(`${DA_ORIGIN}/source${url.destination}`, opts);
-  url.status = 'success';
-  // Don't wait for the version save
+  const daResp = await daFetch(`${DA_ORIGIN}/copy${url.source}`, opts);
+  // Don't wait the version save
   saveVersion(url.destination, `${title} - Rolled Out`);
   return daResp;
 }
@@ -128,83 +120,29 @@ const getDaUrl = (url) => {
   return { org, repo, pathname };
 };
 
-export async function rolloutCopy(url, projectTitle) {
-  // if the regional folder has content that differs from langstore,
-  // then a regional diff needs to be done
-  try {
-    const regionalCopy = await getHtml(url.destination);
-    if (!regionalCopy) {
-      throw new Error('No regional content or error fetching');
-    }
-
-    const langstoreCopy = await getHtml(url.source);
-    if (!langstoreCopy) {
-      throw new Error('No langstore content or error fetching');
-    }
-
-    removeLocTags(regionalCopy);
-
-    if (langstoreCopy.querySelector('main').outerHTML === regionalCopy.querySelector('main').outerHTML) {
-      // No differences, don't need to do anything
-      url.status = 'success';
-      return Promise.resolve();
-    }
-
-    // There are differences, upload the annotated loc file
-    const diffedMain = await regionalDiff(langstoreCopy, regionalCopy);
-
-    return new Promise((resolve) => {
-      const daUrl = getDaUrl(url);
-      const savePromise = saveToDa(diffedMain.innerHTML, daUrl);
-
-      const timedout = setTimeout(() => {
-        url.status = 'timeout';
-        resolve('timeout');
-      }, DEFAULT_TIMEOUT);
-
-      savePromise.then(({ daResp }) => {
-        clearTimeout(timedout);
-        url.status = daResp.ok ? 'success' : 'error';
-        if (daResp.ok) {
-          saveVersion(url.destination, `${projectTitle} - Rolled Out`);
-        }
-        resolve();
-      }).catch(() => {
-        clearTimeout(timedout);
-        url.status = 'error';
-        resolve();
-      });
-    });
-  } catch (e) {
-    return overwriteCopy(url, projectTitle);
-  }
-}
-
 export async function mergeCopy(url, projectTitle) {
   try {
-    const regionalCopy = await getHtml(url.destination);
-    if (!regionalCopy) throw new Error('No regional content or error fetching');
+    const sourceHtml = await getHtml(url.source);
+    if (!sourceHtml) throw new Error('No source content or error fetching');
 
-    const langstoreCopy = await getHtml(url.source);
-    if (!langstoreCopy) throw new Error('No langstore content or error fetching');
+    const destinationHtml = await getHtml(url.destination);
+    if (!destinationHtml) throw new Error('No destination content or error fetching');
 
-    removeLocTags(regionalCopy);
+    removeLocTags(destinationHtml);
 
-    if (langstoreCopy.querySelector('main').outerHTML === regionalCopy.querySelector('main').outerHTML) {
+    if (sourceHtml.querySelector('main').outerHTML === destinationHtml.querySelector('main').outerHTML) {
+      console.log('no changes');
       // No differences, don't need to do anything
       url.status = 'success';
       return { ok: true };
     }
 
     // There are differences, upload the annotated loc file
-    const diffedMain = await regionalDiff(langstoreCopy, regionalCopy);
+    const diffedMain = await diffHtml(sourceHtml, destinationHtml);
 
     const daUrl = getDaUrl(url);
     const { daResp } = await saveToDa(diffedMain.innerHTML, daUrl);
-    if (daResp.ok) {
-      url.status = 'success';
-      saveVersion(url.destination, `${projectTitle} - Rolled Out`);
-    }
+    if (daResp.ok) saveVersion(url.destination, `${projectTitle} - Rolled Out`);
     return daResp;
   } catch (e) {
     return overwriteCopy(url, projectTitle);
