@@ -65,7 +65,7 @@ p {
   inset: 56px 17px auto auto;
   border: none;
   border-radius: var(--s2-radius-200);
-  min-width: 320px;
+  width: 340px;
   padding: 0;
   box-shadow: 0 0 2px 0 rgb(0 0 0 / 12%), 0 3px 6px 0 rgb(0 0 0 / 4%), 0 4px 8px 0 rgb(0 0 0 / 8%);
 }
@@ -82,13 +82,11 @@ p {
 .nx-menu-btn-details {
   position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  text-align: center;
   gap: 14px;
   background: transparent;
   border: none;
-  padding: 24px;
+  padding: 24px 44px 24px 24px;
   transition: all 0.2s ease-in-out;
 }
 
@@ -138,6 +136,8 @@ p {
   display: grid;
   align-content: center;
   justify-items: start;
+  text-align: left;
+  word-break: break-all;
 }
 
 .nx-display-name {
@@ -145,6 +145,7 @@ p {
   font-size: 22px;
   font-weight: 700;
   line-height: 1;
+  word-break: break-word;
 }
 
 .nx-email {
