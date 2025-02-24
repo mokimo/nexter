@@ -57,6 +57,18 @@ class NxProfile extends LitElement {
     this._orgs = await this._details.getAllOrgs();
   }
 
+  handleCopyUser() {
+    try {
+      const blob = new Blob([this._details.userId], { type: 'text/plain' });
+      const data = [new ClipboardItem({ [blob.type]: blob })];
+      navigator.clipboard.write(data);
+      this._notice.classList.toggle('is-visible');
+      setTimeout(() => { this._notice.classList.toggle('is-visible'); }, 3000);
+    } catch {
+      console.log('Could not copy to clipboard');
+    }
+  }
+
   async handleOrgSwitch(org) {
     await window.adobeIMS.switchProfile(org.entitlement_user_id);
     window.location.reload();
@@ -64,6 +76,10 @@ class NxProfile extends LitElement {
 
   handleOrgCancel() {
     this._orgs = undefined;
+  }
+
+  get _notice() {
+    return this.shadowRoot.querySelector('.nx-menu-clipboard-notice');
   }
 
   renderSignIn() {
@@ -107,14 +123,19 @@ class NxProfile extends LitElement {
           <img src="${this._avatar}" alt="" />
         </button>
         <div id="nx-menu-profile" popover>
-          <button class="nx-menu-btn nx-menu-btn-details">
-            <img src="${this._avatar}" alt="Profile photo" />
-            <div class="nx-menu-details-name">
-              <p class="nx-display-name">${this._details.displayName}</p>
-              <p class="nx-email">${this._details.email}</p>
-            </div>
-            <svg class="icon" title="Share profile"><use href="#S2IconShare20N-icon"/></svg>
-          </button>
+          <div class="nx-menu-details-wrapper">
+            <p class="nx-menu-clipboard-notice">User ID copied to clipboard.</p>
+            <button class="nx-menu-btn nx-menu-btn-details" @click=${this.handleCopyUser}>
+              <picture>
+                <img src="${this._avatar}" alt="Profile photo" />
+              </picture>
+              <div class="nx-menu-details-name">
+                <p class="nx-display-name">${this._details.displayName}</p>
+                <p class="nx-email">${this._details.email}</p>
+              </div>
+              <svg class="icon" title="Share profile"><use href="#S2IconShare20N-icon"/></svg>
+            </button>
+          </div>
           ${this._org && !this._orgs ? this.renderOrg() : nothing}
           ${this._orgs ? this.renderOrgs() : nothing}
           <div class="nx-menu-links">

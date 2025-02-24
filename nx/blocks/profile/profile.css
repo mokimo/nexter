@@ -88,6 +88,7 @@ p {
   border: none;
   padding: 24px 44px 24px 24px;
   transition: all 0.2s ease-in-out;
+  width: 100%;
 }
 
 .nx-menu-btn::before,
@@ -126,6 +127,12 @@ p {
   background: rgb(22 122 243);
 }
 
+.nx-menu-btn-details picture {
+  display: block;
+  border-radius: 38px;
+  overflow: hidden;
+}
+
 .nx-menu-btn-details img {
   display: block;
   width: 75px;
@@ -150,6 +157,29 @@ p {
 
 .nx-email {
   margin: 0;
+}
+
+.nx-menu-details-wrapper {
+  position: relative;
+}
+
+.nx-menu-clipboard-notice {
+  display: flex;
+  font-weight: 700;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  inset: 0;
+  color: rgb(22 122 243);
+  background: rgb(228 240 255);
+  border-bottom: 1px solid;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.nx-menu-clipboard-notice.is-visible {
+  opacity: 1;
+  z-index: 3;
 }
 
 .nx-menu-btn-org {
