@@ -24,7 +24,14 @@ async function findFragments(pageUrl, text, liveDomain) {
 
   const dom = parser.parseFromString(text, 'text/html');
   const results = dom.body.querySelectorAll(LINK_SELECTORS.join(', '));
-  const linkedImports = [...results].reduce((acc, a) => {
+  const pattern = /https:\/\/[^"'\s]+\.svg/g;
+  const matches = text.match(pattern)?.map((svgUrl) => {
+    const a = dom.window.document.createElement('a');
+    a.href = svgUrl;
+    return a;
+  }) || [];
+
+  const linkedImports = [...results, ...matches].reduce((acc, a) => {
     let href = a.getAttribute('href') || a.getAttribute('alt');
 
     // Don't add any off origin content.
@@ -62,8 +69,28 @@ export function calculateTime(startTime) {
   return `${String((totalTime / 1000) / 60).substring(0, 4)}`;
 }
 
+// If an image in metadata has a leading space to it
+// we'll need to remove to prevent losing the reference to the img
+function safeguardMetadataImages(dom) {
+  const metadata = dom.window.document.querySelector('.metadata');
+  if (metadata) {
+    metadata.querySelectorAll('div').forEach((row) => {
+      const metadataKey = row.querySelector('div:first-child')?.textContent.trim().toLowerCase();
+      if (metadataKey === 'image') row.querySelectorAll('br')?.forEach((br) => br.remove());
+    });
+  }
+  const cardMetadata = dom.window.document.querySelector('.card-metadata');
+  if (cardMetadata) {
+    cardMetadata.querySelectorAll('div').forEach((row) => {
+      const metadataKey = row.querySelector('div:first-child')?.textContent.trim().toLowerCase();
+      if (metadataKey === 'cardImage') row.querySelectorAll('br')?.forEach((br) => br.remove());
+    });
+  }
+}
+
 async function getAemHtml(url, text) {
   const dom = mdToDocDom(text);
+  safeguardMetadataImages(dom);
   const aemHtml = docDomToAemHtml(dom);
   return aemHtml;
 }
